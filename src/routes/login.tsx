@@ -4,6 +4,7 @@ import { FirebaseError } from "firebase/app";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../firebase";
 import { Error, Input, Switcher, Title, Wrapper } from "../components/auth-components";
+import GithubButton from "../components/github-btn";
 
 export default function CreateAccount() {
     const navigate = useNavigate();
@@ -52,6 +53,7 @@ export default function CreateAccount() {
                 Create &rarr;
              </ Link>
         </Switcher>
+        <GithubButton />
     </Wrapper>
     );
 }
