@@ -20,6 +20,7 @@ const Wrapper = styled.div`
   flex-direction: column;
   gap: 20px;
 `;
+
 const AvatarUpload = styled.label`
   width: 80px;
   overflow: hidden;
@@ -38,11 +39,36 @@ const AvatarUpload = styled.label`
 const AvatarImg = styled.img`
   width: 100%;
 `;
+
 const AvatarInput = styled.input`
   display: none;
 `;
+
 const Name = styled.span`
   font-size: 22px;
+`;
+
+const NameWrapper = styled.div`
+  display: flex;
+  align-items: center;
+`;
+
+const EditNameButton = styled.button`
+  background: none;
+  border: none;
+  padding: 0;
+  margin-left: 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  width: 22px;
+  height: 22px;
+
+  svg {
+    width: 100%;
+    height: 100%;
+    stroke: white;
+  }
 `;
 
 const Tweets = styled.div`
@@ -56,6 +82,8 @@ export default function Profile() {
   const user = auth.currentUser;
   const [avatar, setAvatar] = useState(user?.photoURL);
   const [tweets, setTweets] = useState<ITweet[]>([]);
+  const [name, setName] = useState(user?.displayName ?? "Anonymous"); // 이름 상태 추가
+
   const onAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const { files } = e.target;
     if (!user) return;
@@ -70,6 +98,7 @@ export default function Profile() {
       });
     }
   };
+
   const fetchTweets = async () => {
     const tweetQuery = query(
       collection(db, "tweets"),
@@ -91,9 +120,25 @@ export default function Profile() {
     });
     setTweets(tweets);
   };
+
   useEffect(() => {
     fetchTweets();
   }, []);
+
+  // 이름 수정 메서드
+  const onEditName = async () => {
+    if (!user) return;
+    const newName = prompt("새로운 이름을 입력하세요.", name);
+    if (newName && newName !== name) {
+      try {
+        await updateProfile(user, { displayName: newName });
+        setName(newName);
+      } catch (e) {
+        console.log(e);
+      }
+    }
+  };
+
   return (
     <Wrapper>
       <AvatarUpload htmlFor="avatar">
@@ -116,7 +161,24 @@ export default function Profile() {
         type="file"
         accept="image/*"
       />
-      <Name>{user?.displayName ?? "Anonymous"}</Name>
+      <NameWrapper>
+        <Name>{name}</Name>
+        <EditNameButton onClick={onEditName}>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth="1.5"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10"
+            />
+          </svg>
+        </EditNameButton>
+      </NameWrapper>
       <Tweets>
         {tweets.map((tweet) => (
           <Tweet key={tweet.id} {...tweet} />
