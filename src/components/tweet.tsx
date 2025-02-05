@@ -36,11 +36,11 @@ export default function Tweet({ username, photo, tweet }: iTweet) {
                 <UserNmae>{username}</UserNmae>
                 <Payload>{tweet}</Payload>
             </Column>
+            <Column>
             {photo ? (
-                <Column>
                     <Photo src={photo} />
-                </Column>
             ) : null}
+            </Column>
         </Wrapper>
     );
 }
