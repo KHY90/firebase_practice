@@ -1,87 +1,91 @@
 import {
     collection,
-    getDocs,
     limit,
     onSnapshot,
     orderBy,
     query,
-} from "firebase/firestore";
-import { useEffect, useState } from "react";
-import { styled } from "styled-components";
-import { db } from "../firebase";
-import Tweet from "./tweet";
-import { Unsubscribe } from "firebase/auth";
-
-export interface ITweet {
+  } from "firebase/firestore";
+  import { useEffect, useState } from "react";
+  import { styled } from "styled-components";
+  import { db } from "../firebase";
+  import Tweet from "./tweet";
+  import { Unsubscribe } from "firebase/auth";
+  
+  export interface ITweet {
     id: string;
     photo?: string;
     tweet: string;
     userId: string;
     username: string;
     createdAt: number;
-}
-
-const Wrapper = styled.div`
+  }
+  
+  const Wrapper = styled.div`
     display: flex;
     gap: 10px;
     flex-direction: column;
-    overflow-y: scroll;
+    /* 필요에 따라 높이나 overflow-y를 추가 */
+    overflow-y: auto;
   `;
-
-export default function Timeline() {
+  
+  export default function Timeline() {
     const [tweets, setTweet] = useState<ITweet[]>([]);
-
+  
     useEffect(() => {
-        let unsubscribe: Unsubscribe | null = null;
-        // -> 기본값을 null로 설정, 마운트 될동안은 null값, 언마운트되면 Unsubscribe
-        const fetchTweets = async () => {
-            const tweetsQuery = query(
-                collection(db, "tweets"),
-                orderBy("createdAt", "desc"),
-                limit(25)
-            );
-            /* const spanshot = await getDocs(tweetsQuery);
-              const tweets = spanshot.docs.map((doc) => {
-                const { tweet, createdAt, userId, username, photo } = doc.data();
-                return {
-                  tweet,
-                  createdAt,
-                  userId,
-                  username,
-                  photo,
-                  id: doc.id,
-                };
-              }); */
-            unsubscribe = await onSnapshot(tweetsQuery, (snapshot) => {
-            // 1. onSnapshot : 특정 문서나 컬렉션, 쿼리에서 변경사항이 일어날때 실시간으로 이벤트 콜백 함수를 실행
-            // unsubscribe= await onSnapshot(tweetsQuery, callback func)
-            // -> 쿼리에서 이벤트 발생시 callback 함수 실행
-            // 2. onSnapShot 사용시 비용을 지불(구독)해야하므로 사용자가 해당 컴포넌트를 언마운트 했을 경우 구독 취소해줘야한다. 즉 해당 컴포넌트가 마운트될때 구독되고 언마운트 될때 구독 취소해야한다. 이를위해 useEffect의 cleanup함수에 구독취소코드를 넣어준다.
-                const tweets = snapshot.docs.map((doc) => {
-                    const { tweet, createdAt, userId, username, photo } = doc.data();
-                    return {
-                        tweet,
-                        createdAt,
-                        userId,
-                        username,
-                        photo,
-                        id: doc.id,
-                    };
-                });
-                setTweet(tweets);
-            });
-        };
-        fetchTweets();
-        return () => {
-            unsubscribe && unsubscribe();
-        // // cleanup function : 해당 컴포넌트가 언마운트 됄때 호출
-        };
+      let unsubscribe: Unsubscribe | null = null;
+      // -> 기본값을 null로 설정, 마운트 되는 동안은 null, 언마운트 시 Unsubscribe 호출
+  
+      const fetchTweets = async () => {
+        const tweetsQuery = query(
+          collection(db, "tweets"),
+          orderBy("createdAt", "desc"),
+          limit(25)
+        );
+        unsubscribe = onSnapshot(tweetsQuery, (snapshot) => {
+          const tweets = snapshot.docs.map((doc) => {
+            const data = doc.data();
+            let photoUrl: string | undefined;
+            if (data.photo) {
+              if (typeof data.photo === "string") {
+                // 이미 문자열 형태라면 그대로 사용
+                photoUrl = data.photo;
+              } else if (
+                // Firestore Bytes 객체는 toUint8Array 함수가 있음
+                data.photo.toUint8Array &&
+                typeof data.photo.toUint8Array === "function"
+              ) {
+                const uint8Array = data.photo.toUint8Array();
+                const blob = new Blob([uint8Array], { type: "image/jpeg" });
+                photoUrl = URL.createObjectURL(blob);
+              }
+            }
+            return {
+              tweet: data.tweet,
+              createdAt: data.createdAt,
+              userId: data.userId,
+              username: data.username,
+              photo: photoUrl,
+              id: doc.id,
+            };
+          });
+          setTweet(tweets);
+        });
+      };
+  
+      fetchTweets();
+      return () => {
+        if (unsubscribe) {
+          unsubscribe();
+        }
+        // cleanup function : 해당 컴포넌트가 언마운트 될 때 구독 취소
+      };
     }, []);
+  
     return (
-        <Wrapper>
-            {tweets.map((tweet) => (
-                <Tweet key={tweet.id} {...tweet} />
-            ))}
-        </Wrapper>
+      <Wrapper>
+        {tweets.map((tweet) => (
+          <Tweet key={tweet.id} {...tweet} />
+        ))}
+      </Wrapper>
     );
-}
+  }  

@@ -1,8 +1,7 @@
 import { styled } from "styled-components";
 import { ITweet } from "./timeline";
-import { auth, db, storage } from "../firebase";
+import { auth, db } from "../firebase";
 import { deleteDoc, doc, updateDoc } from "firebase/firestore";
-import { deleteObject, ref } from "firebase/storage";
 
 const Wrapper = styled.div`
   display: grid;
@@ -44,6 +43,7 @@ const DeleteButton = styled.button`
   text-transform: uppercase;
   border-radius: 5px;
   cursor: pointer;
+  margin-top: 30px;
 `;
 
 const EditButton = styled.button`
@@ -56,54 +56,49 @@ const EditButton = styled.button`
   text-transform: uppercase;
   border-radius: 5px;
   cursor: pointer;
-  margin-left: 5px; /* 버튼 간 간격 추가 */
+  margin-left: 10px; /* 버튼 간 간격 추가 */
 `;
 
 export default function Tweet({ username, photo, tweet, userId, id }: ITweet) {
-    const user = auth.currentUser;
-    // 삭제
-    const onDelete = async () => {
-        const ok = confirm("정말 삭제하시겠습니까?");
-        if (!ok || user?.uid !== userId) return;
-        try {
-            await deleteDoc(doc(db, "tweets", id));
-            if (photo) {
-                const photoRef = ref(storage, `tweets/${user.uid}/${id}`);
-                await deleteObject(photoRef);
-            }
-        } catch (e) {
-            console.log(e);
-        } finally {
-            //
-        }
-    };
-    // 수정
-    const onEdit = async () => {
-        if (user?.uid !== userId) return;
-        const newTweet = prompt("수정할 내용을 입력해주세요.", tweet);
-        if (newTweet === null || newTweet === tweet) return;
-        try {
-            await updateDoc(doc(db, "tweets", id), { tweet: newTweet });
-        } catch (e) {
-            console.log(e);
-        } finally {
-            //
-        }
-    };
+  const user = auth.currentUser;
+  
+  // 삭제
+  const onDelete = async () => {
+    const ok = confirm("정말 삭제하시겠습니까?");
+    if (!ok || user?.uid !== userId) return;
+    try {
+      // Storage 관련 삭제 코드 제거 → Firestore의 해당 문서만 삭제됩니다.
+      await deleteDoc(doc(db, "tweets", id));
+    } catch (e) {
+      console.log(e);
+    }
+  };
 
-    return (
-        <Wrapper>
-            <Column>
-                <Username>{username}</Username>
-                <Payload>{tweet}</Payload>
-                {user?.uid === userId ? (
-                    <>
-                        <DeleteButton onClick={onDelete}>Delete</DeleteButton>
-                        <EditButton onClick={onEdit}>Edit</EditButton>
-                    </>
-                ) : null}
-            </Column>
-            <Column>{photo ? <Photo src={photo} /> : null}</Column>
-        </Wrapper>
-    );
+  // 수정
+  const onEdit = async () => {
+    if (user?.uid !== userId) return;
+    const newTweet = prompt("수정할 내용을 입력해주세요.", tweet);
+    if (newTweet === null || newTweet === tweet) return;
+    try {
+      await updateDoc(doc(db, "tweets", id), { tweet: newTweet });
+    } catch (e) {
+      console.log(e);
+    }
+  };
+
+  return (
+    <Wrapper>
+      <Column>
+        <Username>{username}</Username>
+        <Payload>{tweet}</Payload>
+        {user?.uid === userId ? (
+          <>
+            <DeleteButton onClick={onDelete}>Delete</DeleteButton>
+            <EditButton onClick={onEdit}>Edit</EditButton>
+          </>
+        ) : null}
+      </Column>
+      <Column>{photo ? <Photo src={photo} /> : null}</Column>
+    </Wrapper>
+  );
 }

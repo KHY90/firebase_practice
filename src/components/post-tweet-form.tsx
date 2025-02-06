@@ -1,9 +1,7 @@
-import { addDoc, collection, updateDoc } from "firebase/firestore";
+import { addDoc, Bytes, collection, updateDoc } from "firebase/firestore";
 import { useState } from "react";
 import { styled } from "styled-components";
-import { auth, db, Storage } from "../firebase";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-
+import { auth, db } from "../firebase";
 
 const Form = styled.form`
     display: flex;
@@ -60,65 +58,75 @@ const SubmitBtn = styled.input`
     }
 `;
 
-
 export default function PostTweetForm() {
     const [isLoading, setLoading] = useState(false);
     const [tweet, setTweet] = useState("");
     const [file, setFile] = useState<File | null>(null);
+  
     const onChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        setTweet(e.target.value);
+      setTweet(e.target.value);
     };
+  
     const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { files } = e.target;
-        if (files && files.length === 1) {
-            setFile(files[0]);
+      const { files } = e.target;
+      if (files && files.length === 1) {
+        // 1MB = 1024 * 1024 bytes
+        if (files[0].size > 1024 * 1024) {
+          alert("이미지 파일은 1MB 이하만 등록할 수 있습니다.");
+          return;
         }
+        setFile(files[0]);
+      }
     };
-    const onSubmit = async (e:React.FormEvent<HTMLFormElement>)=>{
-        e.preventDefault();
-        const user = auth.currentUser
-        if(!user || isLoading || tweet === "" || tweet.length > 180) return;
-        try {
-            setLoading(true);
-            const doc = await addDoc(collection(db, "tweets"), {
-                tweet,
-                createdAt: Date.now(),
-                username: user.displayName || "익명",
-                userId: user.uid,
-            }); 
-            if(file){
-                const locationRef = ref(Storage, `tweets/${user.uid}/${doc.id}`);
-                const result = await uploadBytes(locationRef, file);
-                const url = await getDownloadURL(result.ref);
-                updateDoc(doc, {
-                    photo: url,
-                });
-                setTweet("");
-                setFile(null);
-            }
-        } catch (e) {
-            console.log(e);
-        } finally{
-            setLoading(false);
+  
+    const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      const user = auth.currentUser;
+      if (!user || isLoading || tweet === "" || tweet.length > 180) return;
+      try {
+        setLoading(true);
+        // Firestore에 텍스트 데이터로 tweet 문서를 먼저 생성
+        const tweetDoc = await addDoc(collection(db, "tweets"), {
+          tweet,
+          createdAt: Date.now(),
+          username: user.displayName || "익명",
+          userId: user.uid,
+        });
+  
+        if (file) {
+          // 파일을 ArrayBuffer로 변환한 후 Uint8Array(바이너리 데이터)로 변환
+          const buffer = await file.arrayBuffer();
+          const uint8Array = new Uint8Array(buffer);
+          // Firestore에서 지원하는 Bytes 타입으로 변환하여 저장
+          await updateDoc(tweetDoc, {
+            photo: Bytes.fromUint8Array(uint8Array),
+          });
+          setFile(null);
         }
+        // 전송 후 tweet 내용 초기화
+        setTweet("");
+      } catch (e) {
+        console.log(e);
+      } finally {
+        setLoading(false);
+      }
     };
-
+  
     return (
-        <Form onSubmit={onSubmit}>
-            <TextArea 
-            required
-            rows={5}
-            maxLength={180}
-            onChange={onChange}
-            value={tweet}
-            placeholder="What is happening?" />
-            <AttachFileButton htmlFor="file">
-                {file ? "Photo added ✅" : "Add photo"}
-            </AttachFileButton>
-            <AttachFileInput onChange={onFileChange}
-                type="file" id="file" accept="image/*" />
-            <SubmitBtn type="submit"
-                value={isLoading ? "Posting..." : "Post tweet"} />
-        </Form>
+      <Form onSubmit={onSubmit}>
+        <TextArea
+          required
+          rows={5}
+          maxLength={180}
+          onChange={onChange}
+          value={tweet}
+          placeholder="What is happening?"
+        />
+        <AttachFileButton htmlFor="file">
+          {file ? "Photo added ✅" : "Add photo"}
+        </AttachFileButton>
+        <AttachFileInput onChange={onFileChange} type="file" id="file" accept="image/*" />
+        <SubmitBtn type="submit" value={isLoading ? "Posting..." : "Post tweet"} />
+      </Form>
     );
-}
+  }

@@ -1,8 +1,7 @@
 import { styled } from "styled-components";
-import { auth, db, storage } from "../firebase";
+import { auth, db } from "../firebase";
 import { useEffect, useState } from "react";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { updateProfile } from "firebase/auth";
+import { updateProfile, onAuthStateChanged } from "firebase/auth";
 import {
   collection,
   getDocs,
@@ -79,35 +78,52 @@ const Tweets = styled.div`
 `;
 
 export default function Profile() {
-  const user = auth.currentUser;
-  const [avatar, setAvatar] = useState(user?.photoURL);
+  const [currentUser, setCurrentUser] = useState(auth.currentUser);
+  const [avatar, setAvatar] = useState(currentUser?.photoURL);
   const [tweets, setTweets] = useState<ITweet[]>([]);
-  const [name, setName] = useState(user?.displayName ?? "Anonymous"); // 이름 상태 추가
+  const [name, setName] = useState(currentUser?.displayName ?? "Anonymous");
 
+  // Auth 상태 변경 감지: 사용자가 로그인되면 상태 업데이트 및 트윗 불러오기
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      if (user) {
+        setAvatar(user.photoURL);
+        setName(user.displayName || "Anonymous");
+        fetchTweets(user);
+      }
+    });
+    return unsubscribe;
+  }, []);
+
+  // 아바타 변경: data URL로 변환하여 업데이트
   const onAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const { files } = e.target;
-    if (!user) return;
+    if (!currentUser) return;
     if (files && files.length === 1) {
       const file = files[0];
-      const locationRef = ref(storage, `avatars/${user?.uid}`);
-      const result = await uploadBytes(locationRef, file);
-      const avatarUrl = await getDownloadURL(result.ref);
-      setAvatar(avatarUrl);
-      await updateProfile(user, {
-        photoURL: avatarUrl,
-      });
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const dataUrl = reader.result as string;
+        setAvatar(dataUrl);
+        await updateProfile(currentUser, {
+          photoURL: dataUrl,
+        });
+      };
+      reader.readAsDataURL(file);
     }
   };
 
-  const fetchTweets = async () => {
+  // 현재 사용자의 트윗 데이터를 Firestore에서 가져오기
+  const fetchTweets = async (user: any) => {
     const tweetQuery = query(
       collection(db, "tweets"),
-      where("userId", "==", user?.uid),
+      where("userId", "==", user.uid),
       orderBy("createdAt", "desc"),
       limit(25)
     );
     const snapshot = await getDocs(tweetQuery);
-    const tweets = snapshot.docs.map((doc) => {
+    const tweetsData = snapshot.docs.map((doc) => {
       const { tweet, createdAt, userId, username, photo } = doc.data();
       return {
         tweet,
@@ -118,20 +134,16 @@ export default function Profile() {
         id: doc.id,
       };
     });
-    setTweets(tweets);
+    setTweets(tweetsData);
   };
-
-  useEffect(() => {
-    fetchTweets();
-  }, []);
 
   // 이름 수정 메서드
   const onEditName = async () => {
-    if (!user) return;
+    if (!currentUser) return;
     const newName = prompt("새로운 이름을 입력하세요.", name);
     if (newName && newName !== name) {
       try {
-        await updateProfile(user, { displayName: newName });
+        await updateProfile(currentUser, { displayName: newName });
         setName(newName);
       } catch (e) {
         console.log(e);
@@ -180,9 +192,11 @@ export default function Profile() {
         </EditNameButton>
       </NameWrapper>
       <Tweets>
-        {tweets.map((tweet) => (
-          <Tweet key={tweet.id} {...tweet} />
-        ))}
+        {tweets.length > 0 ? (
+          tweets.map((tweet) => <Tweet key={tweet.id} {...tweet} />)
+        ) : (
+          <p>등록된 트윗이 없습니다.</p>
+        )}
       </Tweets>
     </Wrapper>
   );
